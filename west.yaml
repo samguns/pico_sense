@@ -1,0 +1,20 @@
+# Portable workspace manifest with pinned Zephyr and RP2350 dependencies.
+manifest:
+  remotes:
+    - name: zephyrproject-rtos
+      url-base: https://github.com/zephyrproject-rtos
+
+  projects:
+    - name: zephyr
+      remote: zephyrproject-rtos
+      revision: 27150c9dd348690a6b41d3992dd5d3d1458fdc66
+      west-commands: scripts/west-commands.yml
+    - name: cmsis_6
+      remote: zephyrproject-rtos
+      repo-path: CMSIS_6
+      revision: b2dfbe1a20bbd49c2d2c605073799671074bbb30
+      path: modules/hal/cmsis_6
+    - name: hal_rpi_pico
+      remote: zephyrproject-rtos
+      revision: 266394b0f23dff8f77c54f67f89d62cee246f21d
+      path: modules/hal/rpi_pico

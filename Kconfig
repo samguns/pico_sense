@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+mainmenu "Pico Sense"
+
+config PICO_SENSE_AUDIO
+	bool "MAX98357A PIO audio output"
+	default y
+	select PICOSDK_USE_DMA
+	help
+	  Use PIO0 and two DMA channels for continuous I2S output.
+
+source "Kconfig.zephyr"

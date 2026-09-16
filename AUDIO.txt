@@ -1,0 +1,56 @@
+MAX98357A speaker output
+=======================
+
+Wiring (Pico 2 GPIO numbers):
+  GP10 -> BCLK
+  GP11 -> LRC / LRCLK / WS
+  GP12 -> DIN
+  VBUS -> VIN (USB 5 V)
+  GND  -> GND
+  Speaker between SPK+ and SPK-, neither terminal grounded.
+
+SD/EN is controlled by the breakout's pull resistors, not the firmware.
+Leaving it unconnected requires a breakout with an onboard enable pullup.
+If the tone is silent, check that SD/EN is not held low. GAIN can be left
+unconnected. No MCLK or I2C control connection is needed.
+
+Flash build/zephyr/zephyr.uf2 through BOOTSEL. Select "RP2350 UAC+CDC" as
+the computer's audio output and play audio. USB accepts 48 kHz, 16-bit
+stereo PCM. The firmware averages left/right and sends the same mono mix
+in both I2S slots, so either MAX98357A channel selection plays both inputs.
+
+Open the CDC serial port at 115200 baud (see README.md for port selection):
+  tone       Play a quiet 1 kHz tone for one second, without host playback.
+  vol 25     Set speaker software volume, 0..100 percent (default 25).
+  vol 0      Mute the speaker.
+  loop       Copy USB playback to the USB mono recording stream.
+  noloop     Record silence; this amplifier has no microphone input.
+  boot       Return to the BOOTSEL USB bootloader.
+
+The tone temporarily replaces speaker playback. Volume applies to both
+the tone and playback, but not USB recording loopback.
+
+Build:
+  Follow README.md to activate your environment and select the Zephyr checkout.
+  From the project directory:
+  west build -b rpi_pico2/rp2350a/m33 .
+
+The USB SOF acknowledgement patch in patches/ must be applied to any
+Zephyr checkout missing the fix. See patches/README.txt for instructions.
+
+Implementation:
+  PIO0 generates 16-bit I2S: 48 kHz LRCLK, 1.536 MHz BCLK.
+  Two chained DMA channels supply 2 ms buffers. DMA IRQ0 refills the
+  completed buffer while the other channel transmits; no audio busy loop.
+  The application owns DMA IRQ0 and initializes the DMA controller.
+  CONFIG_DMA must stay disabled to avoid a second driver owning that IRQ.
+  USB playback uses a locked 8 ms ring, a 4 ms prefill, silence on underrun,
+  and occupancy-based asynchronous USB feedback to compensate clock drift.
+  GP10/GP11 must stay adjacent; assignments are in app.overlay.
+
+Host tests:
+  python3 tests/test_audio.py
+
+The build and host tests do not verify wiring or physical speaker output.
+Reference for the amplifier interface and SD_MODE:
+https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98357A-MAX98357B.pdf

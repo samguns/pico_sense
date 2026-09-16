@@ -1,0 +1,177 @@
+#include <zephyr/dt-bindings/gpio/gpio.h>
+#include <zephyr/dt-bindings/usb/audio.h>
+#include <zephyr/dt-bindings/i2c/i2c.h>
+#include <zephyr/dt-bindings/mipi_dbi/mipi_dbi.h>
+#include <zephyr/dt-bindings/pinctrl/rpi-pico-rp2350a-pinctrl.h>
+
+/ {
+	aliases {
+		audio-pio = &pio0;
+	};
+
+	zephyr,user {
+		i2s-bclk-pin = <10>;
+		i2s-lrclk-pin = <11>;
+		i2s-data-pin = <12>;
+	};
+
+	chosen {
+		zephyr,console = &cdc_acm_uart0;
+		zephyr,display = &st7796s;
+		zephyr,touch = &gt911;
+	};
+
+	/* Windows usbaudio2.sys (Win10 1703+) does not support implicit
+	 * feedback, and rejects FS SOF-synchronous ISO. Async + explicit
+	 * feedback is the path Zephyr documents for Windows, together with
+	 * CONFIG_USBD_UAC2_FS_WINDOWS_WORKAROUND (FS feedback MPS = 4).
+	 */
+	uac2_headset: usb_audio2 {
+		compatible = "zephyr,uac2";
+		status = "okay";
+		full-speed;
+		audio-function = <AUDIO_FUNCTION_HEADSET>;
+
+		uac_aclk: aclk {
+			compatible = "zephyr,uac2-clock-source";
+			clock-type = "internal-programmable";
+			frequency-control = "host-programmable";
+			sampling-frequencies = <48000>;
+		};
+
+		out_terminal: out_terminal {
+			compatible = "zephyr,uac2-input-terminal";
+			clock-source = <&uac_aclk>;
+			terminal-type = <USB_TERMINAL_STREAMING>;
+			front-left;
+			front-right;
+		};
+
+		headphones_output: headphones {
+			compatible = "zephyr,uac2-output-terminal";
+			data-source = <&out_terminal>;
+			clock-source = <&uac_aclk>;
+			terminal-type = <BIDIRECTIONAL_TERMINAL_HEADSET>;
+			assoc-terminal = <&mic_input>;
+		};
+
+		mic_input: microphone {
+			compatible = "zephyr,uac2-input-terminal";
+			clock-source = <&uac_aclk>;
+			terminal-type = <BIDIRECTIONAL_TERMINAL_HEADSET>;
+			front-left;
+		};
+
+		in_terminal: in_terminal {
+			compatible = "zephyr,uac2-output-terminal";
+			data-source = <&mic_input>;
+			clock-source = <&uac_aclk>;
+			terminal-type = <USB_TERMINAL_STREAMING>;
+		};
+
+		as_iso_out: out_interface {
+			compatible = "zephyr,uac2-audio-streaming";
+			linked-terminal = <&out_terminal>;
+			subslot-size = <2>;
+			bit-resolution = <16>;
+		};
+
+		as_iso_in: in_interface {
+			compatible = "zephyr,uac2-audio-streaming";
+			linked-terminal = <&in_terminal>;
+			subslot-size = <2>;
+			bit-resolution = <16>;
+		};
+	};
+
+	lcd_backlight: lcd-backlight {
+		compatible = "regulator-fixed";
+		regulator-name = "lcd-backlight";
+		enable-gpios = <&gpio0 22 GPIO_ACTIVE_HIGH>;
+		regulator-boot-on;
+	};
+
+	mipi_dbi: mipi-dbi {
+		compatible = "zephyr,mipi-dbi-spi";
+		status = "okay";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		spi-dev = <&spi0>;
+		dc-gpios = <&gpio0 16 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio0 20 GPIO_ACTIVE_LOW>;
+		write-only;
+
+		st7796s: st7796s@0 {
+			compatible = "sitronix,st7796s";
+			reg = <0>;
+			mipi-max-frequency = <16000000>;
+			mipi-mode = "MIPI_DBI_MODE_SPI_4WIRE";
+			width = <320>;
+			height = <480>;
+			/*
+			 * Vendor LCD_Init() for USE_HORIZONTAL==0: MADCTL 0x48,
+			 * plus the module's gamma / VCOM / DOCA / PWR3 values.
+			 */
+			/* MX+BGR. SPI pixels are MSB-first; BGR puts R/G/B
+			 * on the panel instead of B/G/R.
+			 */
+			madctl = <0x48>;
+			pwr3 = <0xa7>;
+			vcmpctl = <0x27>;
+			doca = [40 82 07 18 27 0a b6 33];
+			pgc = [f0 01 06 0f 12 1d 36 54 44 0c 18 16 13 15];
+			ngc = [f0 01 05 0a 0b 07 32 44 44 0c 18 17 13 16];
+		};
+	};
+};
+
+&zephyr_udc0 {
+	cdc_acm_uart0: cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+&pio0 {
+	status = "okay";
+};
+
+&pinctrl {
+	spi0_lcd: spi0_lcd {
+		group1 {
+			pinmux = <SPI0_SCK_P18>, <SPI0_TX_P19>;
+		};
+	};
+
+	i2c1_gt911: i2c1_gt911 {
+		group1 {
+			pinmux = <I2C1_SDA_P2>, <I2C1_SCL_P3>;
+			input-enable;
+			input-schmitt-enable;
+			bias-pull-up;
+		};
+	};
+};
+
+&spi0 {
+	status = "okay";
+	pinctrl-0 = <&spi0_lcd>;
+	pinctrl-names = "default";
+	cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
+};
+
+&i2c1 {
+	status = "okay";
+	pinctrl-0 = <&i2c1_gt911>;
+	pinctrl-names = "default";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+
+	gt911: gt911@5d {
+		compatible = "goodix,gt911";
+		reg = <0x5d>;
+		alt-addr = <0x14>;
+		irq-gpios = <&gpio0 21 (GPIO_ACTIVE_HIGH | GPIO_PULL_UP)>;
+		display = <&st7796s>;
+		screen-width = <320>;
+		screen-height = <480>;
+	};
+};
