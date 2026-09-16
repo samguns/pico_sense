@@ -2,6 +2,8 @@
 
 A Zephyr-based firmware project for the Raspberry Pi Pico 2 (RP2350) that demonstrates a compact USB audio + display + touch device.
 
+Linux-oriented host commands live in this file. For PowerShell, COM ports, and Windows USB notes, see [README-Windows.md](README-Windows.md).
+
 ## Features
 
 - USB CDC ACM serial console
@@ -26,6 +28,7 @@ pico_sense/
 ├── prj.conf
 ├── west.yaml
 ├── README.md
+├── README-Windows.md
 └── src/
     ├── main.c
     ├── uac2_headset.c
@@ -41,8 +44,8 @@ prerequisites for Zephyr. Use a Zephyr SDK compatible with the selected checkout
 (the manifest-pinned checkout specifies SDK 1.0.1).
 
 The project can live anywhere. Run the commands below from the project root.
-Shell examples use Bash on Linux; select the equivalent environment activation
-and serial port for your operating system.
+Shell examples use Bash on Linux. For PowerShell, COM ports, and Windows USB
+notes, see [README-Windows.md](README-Windows.md).
 
 ## Setup
 
@@ -63,11 +66,13 @@ west sdk install --gnu-toolchains arm-zephyr-eabi
 pinned dependencies from upstream repositories; no existing local checkout or
 particular repository directory name is required.
 
-For an existing workspace, activate its Python environment and set `ZEPHYR_BASE`
-to your Zephyr checkout instead of initializing another workspace. From inside
-that workspace, `west list zephyr -f '{abspath}'` prints the checkout location.
-If the SDK is installed outside the locations searched by Zephyr, set
-`ZEPHYR_SDK_INSTALL_DIR` to your SDK installation directory.
+For an existing workspace, skip `west init` / `west update` / `west sdk install`.
+Activate that workspace's Python environment and set `ZEPHYR_BASE` and
+`ZEPHYR_SDK_INSTALL_DIR` from it. From inside that workspace,
+`west list zephyr -f '{abspath}'` prints the checkout location. Keep those
+values in the session or in your user environment; do not commit host-specific
+absolute paths. If this directory is itself a west workspace, `[zephyr] base`
+stays the manifest-relative `deps/zephyr`.
 
 Before the first build, apply the USB SOF fix following
 [patches/README.txt](patches/README.txt). It prevents a USB interrupt stall when
@@ -113,8 +118,8 @@ You can also use `screen`, `picocom`, or a similar serial terminal if preferred.
 The app listens for these commands via the console:
 
 - `boot` – enters the USB bootloader
-- `loop` – enables USB audio loopback
-- `noloop` – disables audio loopback
+- `loop` – USB playback copied to USB record (ignore the INMP441)
+- `noloop` – USB record from the INMP441 (default)
 - `tone` – plays a one-second speaker test tone
 - `vol 0..100` – sets speaker volume (default 25%)
 

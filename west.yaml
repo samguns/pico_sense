@@ -9,6 +9,7 @@ manifest:
       remote: zephyrproject-rtos
       revision: 27150c9dd348690a6b41d3992dd5d3d1458fdc66
       west-commands: scripts/west-commands.yml
+      path: deps/zephyr
     - name: cmsis_6
       remote: zephyrproject-rtos
       repo-path: CMSIS_6

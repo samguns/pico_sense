@@ -1,7 +1,7 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
  *
- * USB Audio 2 playback to I2S, with optional mono USB recording loopback.
+ * USB Audio 2 playback to I2S, with INMP441 capture or USB loopback record.
  */
 
 #include "uac2_headset.h"
@@ -48,7 +48,7 @@ struct uac2_ctx {
 static struct k_spinlock audio_lock;
 
 static struct uac2_ctx uac2_ctx = {
-	.loopback = true,
+	.loopback = false,
 	.play = { .channels = AUDIO_CHANNELS },
 	.rec = { .channels = AUDIO_RECORD_CH },
 };
@@ -131,7 +131,7 @@ static void uac2_data_recv_cb(const struct device *dev, uint8_t terminal, void *
 		const int16_t *stereo = buf;
 
 		ring_push(&ctx->play, stereo, frames);
-		if (audio_loopback_enabled()) {
+		if (ctx->loopback) {
 			int16_t mono[SAMPLES_PER_SOF + 1];
 			size_t n = MIN(frames, ARRAY_SIZE(mono));
 

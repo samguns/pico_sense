@@ -1,5 +1,9 @@
 # Generated CMake/Zephyr files contain paths specific to the build machine.
 /build*/
 /.venv/
+/deps/
+/modules/
+/zephyr/
+/.west/
 __pycache__/
 *.pyc

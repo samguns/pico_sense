@@ -13,6 +13,7 @@
 		i2s-bclk-pin = <10>;
 		i2s-lrclk-pin = <11>;
 		i2s-data-pin = <12>;
+		i2s-data-in-pin = <13>;
 	};
 
 	chosen {

@@ -1,34 +1,43 @@
-MAX98357A speaker output
-=======================
+MAX98357A speaker and INMP441 microphone
+=======================================
 
-Wiring (Pico 2 GPIO numbers):
-  GP10 -> BCLK
-  GP11 -> LRC / LRCLK / WS
+Shared I²S clocks (Pico 2 is the I²S master):
+  GP10 -> MAX98357A BCLK and INMP441 SCK
+  GP11 -> MAX98357A LRC/LRCLK/WS and INMP441 WS
+
+MAX98357A (speaker):
   GP12 -> DIN
   VBUS -> VIN (USB 5 V)
   GND  -> GND
   Speaker between SPK+ and SPK-, neither terminal grounded.
 
-SD/EN is controlled by the breakout's pull resistors, not the firmware.
-Leaving it unconnected requires a breakout with an onboard enable pullup.
-If the tone is silent, check that SD/EN is not held low. GAIN can be left
-unconnected. No MCLK or I2C control connection is needed.
+  SD/EN is controlled by the breakout's pull resistors, not the firmware.
+  Leaving it unconnected requires a breakout with an onboard enable pullup.
+  If the tone is silent, check that SD/EN is not held low. GAIN can be left
+  unconnected. No MCLK or I2C control connection is needed.
+
+INMP441 (microphone):
+  GP13 -> SD
+  3V3  -> VDD and CHIPEN
+  GND  -> GND and L/R (left channel)
+  Do not connect L/R to 3V3 unless you want the right I²S slot instead.
 
 Flash build/zephyr/zephyr.uf2 through BOOTSEL. Select "RP2350 UAC+CDC" as
-the computer's audio output and play audio. USB accepts 48 kHz, 16-bit
-stereo PCM. The firmware averages left/right and sends the same mono mix
-in both I2S slots, so either MAX98357A channel selection plays both inputs.
+the computer's audio output and input. USB is 48 kHz, 16-bit stereo playback
+and 48 kHz, 16-bit mono record. Speaker playback averages left/right and
+sends the same mono mix in both I2S slots. USB record is the INMP441 left
+channel (24-bit samples truncated to 16-bit).
 
 Open the CDC serial port at 115200 baud (see README.md for port selection):
   tone       Play a quiet 1 kHz tone for one second, without host playback.
   vol 25     Set speaker software volume, 0..100 percent (default 25).
   vol 0      Mute the speaker.
-  loop       Copy USB playback to the USB mono recording stream.
-  noloop     Record silence; this amplifier has no microphone input.
+  noloop     USB record from the INMP441 (default).
+  loop       Copy USB playback to the USB recording stream; ignore the mic.
   boot       Return to the BOOTSEL USB bootloader.
 
 The tone temporarily replaces speaker playback. Volume applies to both
-the tone and playback, but not USB recording loopback.
+the tone and playback, but not USB recording.
 
 Build:
   Follow README.md to activate your environment and select the Zephyr checkout.
@@ -39,9 +48,11 @@ The USB SOF acknowledgement patch in patches/ must be applied to any
 Zephyr checkout missing the fix. See patches/README.txt for instructions.
 
 Implementation:
-  PIO0 generates 16-bit I2S: 48 kHz LRCLK, 1.536 MHz BCLK.
-  Two chained DMA channels supply 2 ms buffers. DMA IRQ0 refills the
-  completed buffer while the other channel transmits; no audio busy loop.
+  PIO0 SM0 generates 32-bit I2S: 48 kHz LRCLK, 3.072 MHz BCLK (64 clocks
+  per frame) so the INMP441 and MAX98357A can share GP10/GP11.
+  PIO0 SM1 waits on those clocks and captures the left 32-bit slot from GP13.
+  Two chained DMA channels per direction supply 2 ms buffers. DMA IRQ0
+  refills TX and harvests RX; no audio busy loop.
   The application owns DMA IRQ0 and initializes the DMA controller.
   CONFIG_DMA must stay disabled to avoid a second driver owning that IRQ.
   USB playback uses a locked 8 ms ring, a 4 ms prefill, silence on underrun,
@@ -51,6 +62,8 @@ Implementation:
 Host tests:
   python3 tests/test_audio.py
 
-The build and host tests do not verify wiring or physical speaker output.
-Reference for the amplifier interface and SD_MODE:
+The build and host tests do not verify wiring or physical speaker/mic audio.
+MAX98357A interface:
 https://www.analog.com/media/en/technical-documentation/data-sheets/MAX98357A-MAX98357B.pdf
+INMP441 interface:
+https://invensense.tdk.com/wp-content/uploads/2015/02/INMP441.pdf

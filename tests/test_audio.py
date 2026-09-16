@@ -96,7 +96,7 @@ size_t count(void) { return ring.count; }
         self.assertEqual([edge[0] for edge in edges], expected)
         # Word select changes while the PREVIOUS sample's last bit is sent.
         self.assertEqual([edge[1] for edge in edges],
-                         ([0] * 15 + [1] * 16 + [0]) * len(words))
+                         ([0] * 31 + [1] * 32 + [0]) * (len(words) // 2))
         self.assertTrue(all(b[2] - a[2] == 2 for a, b in zip(edges, edges[1:])))
 
 

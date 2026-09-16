@@ -21,6 +21,6 @@ size_t audio_playback_pull(int16_t *dst, size_t frames);
 /* Push microphone samples into the USB record path. */
 size_t audio_record_push(const int16_t *src, size_t frames);
 
-/* When true, USB playback is downmixed into USB record (no microphone ADC). */
+/* When true, USB playback is downmixed into USB record instead of the INMP441. */
 void audio_set_loopback(bool enable);
 bool audio_loopback_enabled(void);

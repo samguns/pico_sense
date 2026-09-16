@@ -75,14 +75,10 @@ static int draw_color_bars(const struct device *display)
 	}
 
 	for (size_t y = 0; y < DISPLAY_HEIGHT; y++) {
-		if (IS_ENABLED(CONFIG_ASSERT) && y % 40 == 0) {
-			printk("demo: drawing row %u/%u\n", (unsigned int)y,
-			       (unsigned int)DISPLAY_HEIGHT);
-		}
 		int ret = display_write(display, 0, y, &desc, line);
 
 		if (ret < 0) {
-			printk("demo: display_write failed at row %u (%d)\n",
+			printf("demo: display_write failed at row %u (%d)\n",
 			       (unsigned int)y, ret);
 			return ret;
 		}
@@ -174,12 +170,12 @@ static void console_monitor_poll(const struct device *console)
 				continue;
 			} else if (strcmp(line, "loop") == 0) {
 				audio_set_loopback(true);
-				printf("demo: USB audio loopback on\n");
+				printf("demo: USB audio loopback on (ignore INMP441)\n");
 				len = 0;
 				continue;
 			} else if (strcmp(line, "noloop") == 0) {
 				audio_set_loopback(false);
-				printf("demo: USB audio loopback off (record silence until ADC)\n");
+				printf("demo: USB record from INMP441\n");
 				len = 0;
 				continue;
 			}
@@ -230,7 +226,9 @@ static int demo_usb_boot(void)
 	}
 
 	err = demo_usb_init();
-	printk("demo: USB initialization returned %d\n", err);
+	if (err) {
+		printk("demo: USB initialization failed (%d)\n", err);
+	}
 	return err;
 }
 
@@ -247,7 +245,11 @@ int main(void)
 	if (IS_ENABLED(CONFIG_PICO_SENSE_AUDIO)) {
 		int ret = audio_output_init();
 
-		printf("demo: MAX98357A I2S startup %d, volume 25%%\n", ret);
+		if (ret < 0) {
+			printf("demo: I2S init failed (%d)\n", ret);
+		} else {
+			printf("demo: I2S speaker GP12 / mic GP13, volume 25%%\n");
+		}
 	}
 #endif
 

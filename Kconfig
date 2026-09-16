@@ -2,10 +2,11 @@
 mainmenu "Pico Sense"
 
 config PICO_SENSE_AUDIO
-	bool "MAX98357A PIO audio output"
+	bool "MAX98357A / INMP441 PIO I2S"
 	default y
 	select PICOSDK_USE_DMA
 	help
-	  Use PIO0 and two DMA channels for continuous I2S output.
+	  PIO0 generates shared I2S clocks. Two DMA channels feed the MAX98357A
+	  and two more capture the INMP441 left channel.
 
 source "Kconfig.zephyr"
