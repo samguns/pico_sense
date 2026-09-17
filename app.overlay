@@ -107,16 +107,10 @@
 			reg = <0>;
 			mipi-max-frequency = <16000000>;
 			mipi-mode = "MIPI_DBI_MODE_SPI_4WIRE";
-			width = <320>;
-			height = <480>;
-			/*
-			 * Vendor LCD_Init() for USE_HORIZONTAL==0: MADCTL 0x48,
-			 * plus the module's gamma / VCOM / DOCA / PWR3 values.
-			 */
-			/* MX+BGR. SPI pixels are MSB-first; BGR puts R/G/B
-			 * on the panel instead of B/G/R.
-			 */
-			madctl = <0x48>;
+			width = <480>;
+			height = <320>;
+			/* 90-degree landscape: MV+BGR, preserving panel color order. */
+			madctl = <0x28>;
 			pwr3 = <0xa7>;
 			vcmpctl = <0x27>;
 			doca = [40 82 07 18 27 0a b6 33];

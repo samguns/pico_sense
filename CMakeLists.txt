@@ -12,5 +12,5 @@ if(PICO_SENSE_DIAGNOSTIC_NO_USB)
   target_compile_definitions(app PRIVATE PICO_SENSE_DIAGNOSTIC_NO_USB=1)
 endif()
 
-target_sources(app PRIVATE src/main.c src/usb.c src/uac2_headset.c)
+target_sources(app PRIVATE src/main.c src/battery_display.c src/battery_voltage.c src/usb.c src/uac2_headset.c)
 target_sources_ifdef(CONFIG_PICO_SENSE_AUDIO app PRIVATE src/audio_output.c)

@@ -5,6 +5,7 @@
 #include "uac2_headset.h"
 #include "usb.h"
 #include "audio_output.h"
+#include "battery_display.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,11 +26,6 @@ BUILD_ASSERT(DT_NODE_HAS_COMPAT(DT_CHOSEN(zephyr_display), sitronix_st7796s),
 BUILD_ASSERT(DT_NODE_HAS_COMPAT(DT_CHOSEN(zephyr_touch), goodix_gt911),
 	     "Touch is not GT911");
 
-#define DISPLAY_WIDTH  DT_PROP(DT_CHOSEN(zephyr_display), width)
-#define DISPLAY_HEIGHT DT_PROP(DT_CHOSEN(zephyr_display), height)
-#define LINE_PIXELS    DISPLAY_WIDTH
-#define RGB565_BPP     2
-
 /*
  * Shared LCD/GT911 RESET is owned by the MIPI DBI node. Hold INT low before
  * that reset so GT911 latches I2C address 0x5D.
@@ -46,46 +42,6 @@ static int gt911_hold_int_low(void)
 }
 
 SYS_INIT(gt911_hold_int_low, POST_KERNEL, 40);
-
-static void fill_rgb565(uint8_t *buf, size_t pixels, uint16_t color)
-{
-	/* ST7796 4-wire SPI is 8-bit: send the high RGB565 byte first. */
-	for (size_t i = 0; i < pixels; i++) {
-		buf[i * 2] = color >> 8;
-		buf[i * 2 + 1] = color & 0xFF;
-	}
-}
-
-static int draw_color_bars(const struct device *display)
-{
-	uint8_t line[LINE_PIXELS * RGB565_BPP];
-	const uint16_t colors[] = {0xF800, 0x07E0, 0x001F, 0xFFFF};
-	const size_t band = DISPLAY_WIDTH / ARRAY_SIZE(colors);
-	struct display_buffer_descriptor desc = {
-		.buf_size = sizeof(line),
-		.width = DISPLAY_WIDTH,
-		.height = 1,
-		.pitch = DISPLAY_WIDTH,
-	};
-
-	for (size_t x = 0; x < DISPLAY_WIDTH; x++) {
-		size_t idx = MIN(x / band, ARRAY_SIZE(colors) - 1);
-
-		fill_rgb565(&line[x * RGB565_BPP], 1, colors[idx]);
-	}
-
-	for (size_t y = 0; y < DISPLAY_HEIGHT; y++) {
-		int ret = display_write(display, 0, y, &desc, line);
-
-		if (ret < 0) {
-			printf("demo: display_write failed at row %u (%d)\n",
-			       (unsigned int)y, ret);
-			return ret;
-		}
-	}
-
-	return 0;
-}
 
 static void touch_event(struct input_event *evt, void *user_data)
 {
@@ -137,12 +93,19 @@ static FUNC_NORETURN void enter_usb_bootloader(void)
 
 static void console_monitor_poll(const struct device *console)
 {
-	static char line[16];
+	static char line[48];
+	static bool overflow;
 	static size_t len;
 	unsigned char c;
 
 	while (uart_poll_in(console, &c) == 0) {
 		if (c == '\r' || c == '\n') {
+			if (overflow) {
+				printf("ERR command too long\n");
+				len = 0;
+				overflow = false;
+				continue;
+			}
 			if (len == 0) {
 				continue;
 			}
@@ -150,6 +113,20 @@ static void console_monitor_poll(const struct device *console)
 			printf("\n");
 			if (strcmp(line, "boot") == 0) {
 				enter_usb_bootloader();
+			} else if (strncmp(line, "voltage ", 8) == 0) {
+				unsigned int value;
+				if (battery_voltage_parse(line + 8, &value) < 0) {
+					printf("ERR voltage: use voltage 0..99.99\n");
+				} else {
+					int ret = battery_display_update(value);
+					if (ret < 0) {
+						printf("ERR display %d\n", ret);
+					} else {
+						printf("OK voltage %u.%02u\n", value / 100, value % 100);
+					}
+				}
+				len = 0;
+				continue;
 			} else if (IS_ENABLED(CONFIG_PICO_SENSE_AUDIO) && strcmp(line, "tone") == 0) {
 				audio_output_test_tone();
 				printf("demo: 1 kHz test tone for one second\n");
@@ -179,8 +156,12 @@ static void console_monitor_poll(const struct device *console)
 				len = 0;
 				continue;
 			}
-			printf("demo: unknown command '%s' (boot, loop, noloop, tone, vol 0..100)\n", line);
+			printf("demo: unknown command '%s' (boot, loop, noloop, tone, vol 0..100, voltage 0..99.99)\n", line);
 			len = 0;
+			continue;
+		}
+
+		if (overflow) {
 			continue;
 		}
 
@@ -192,7 +173,11 @@ static void console_monitor_poll(const struct device *console)
 			continue;
 		}
 
-		if (c >= 32 && c < 127 && (len + 1) < sizeof(line)) {
+		if (c >= 32 && c < 127) {
+			if (len + 1 >= sizeof(line)) {
+				overflow = true;
+				continue;
+			}
 			line[len++] = (char)c;
 			uart_poll_out(console, c);
 		}
@@ -212,7 +197,7 @@ static void console_monitor_thread(void *p1, void *p2, void *p3)
 	}
 }
 
-K_THREAD_STACK_DEFINE(console_monitor_stack, 1024);
+K_THREAD_STACK_DEFINE(console_monitor_stack, 2048);
 static struct k_thread console_monitor_tid;
 
 #ifndef PICO_SENSE_DIAGNOSTIC_NO_USB
@@ -259,26 +244,19 @@ int main(void)
 #else
 	printf("demo: USB CDC + UAC2 (48 kHz 16-bit stereo playback, mono record)\n");
 #endif
-	printf("demo: commands: boot, loop, noloop, tone, vol 0..100\n");
+	printf("demo: commands: boot, loop, noloop, tone, vol 0..100, voltage 0..99.99\n");
+
+	int display_ret = battery_display_init(display);
+	if (display_ret < 0) {
+		printf("demo: battery display init failed (%d)\n", display_ret);
+	} else {
+		printf("demo: battery display 480x320 ready\n");
+	}
 
 	k_thread_create(&console_monitor_tid, console_monitor_stack,
 			K_THREAD_STACK_SIZEOF(console_monitor_stack), console_monitor_thread,
 			(void *)console, NULL, NULL, 7, 0, K_NO_WAIT);
 	k_thread_name_set(&console_monitor_tid, "com_mon");
-
-	if (!device_is_ready(display)) {
-		printf("demo: display not ready\n");
-		return 0;
-	}
-
-	(void)display_blanking_off(display);
-
-	if (draw_color_bars(display) < 0) {
-		printf("demo: failed to draw color bars\n");
-		return 0;
-	}
-
-	printf("demo: color bars 320x480 (R/G/B/W)\n");
 
 	if (!device_is_ready(touch)) {
 		printf("demo: touch NOT ready (I2C/GT911 init failed)\n");

@@ -8,7 +8,7 @@ Linux-oriented host commands live in this file. For PowerShell, COM ports, and W
 
 - USB CDC ACM serial console
 - USB Audio Class 2.0 (UAC2) headset device
-- ST7796S 320x480 LCD display
+- ST7796S LCD in 480x320 landscape (90-degree rotation)
 - GT911 touch controller
 - MAX98357A speaker output over PIO/DMA I²S (see [AUDIO.txt](AUDIO.txt))
 - Embedded command console for boot and loopback control
@@ -117,17 +117,47 @@ You can also use `screen`, `picocom`, or a similar serial terminal if preferred.
 
 The app listens for these commands via the console:
 
+- `voltage 12.64` – displays a voltage (0..99.99 V, up to two decimal places)
 - `boot` – enters the USB bootloader
 - `loop` – USB playback copied to USB record (ignore the INMP441)
 - `noloop` – USB record from the INMP441 (default)
 - `tone` – plays a one-second speaker test tone
 - `vol 0..100` – sets speaker volume (default 25%)
 
+## Battery voltage demo
+
+Build and flash the firmware using the steps above. The LCD immediately shows
+BATTERY, `--.-- V`, DC VOLTAGE, and fixed MIN 0 V / MAX 28 V labels. There is no timestamp.
+The USB host supplies illustrative readings; this demo does not measure a battery.
+
+Close other serial terminals, then run:
+
+```bash
+python3 -m pip install pyserial
+python3 scripts/voltage_demo.py --port /dev/ttyACM0
+python3 scripts/voltage_demo.py --port /dev/ttyACM0 --voltage 12.64
+```
+
+On Windows, use `python` and a port such as `--port COM5`.
+Without `--voltage`, the script sends ten samples, leaving 12.64 V on screen
+with MIN 0 V and MAX 28 V. These fixed range labels appear at startup and do
+not change with incoming samples.
+The default sample interval is 0.5 seconds (`--interval` changes it).
+
+Protocol: send ASCII `voltage 12.64\n` over USB CDC at 115200 baud. CRLF also
+works. The board replies `OK voltage 12.64` after the LCD write completes,
+or `ERR ...` for invalid input/display failure. Existing console echo and
+log messages can appear between responses; the script waits for the matching ACK.
+Accepted inputs are unsigned decimal volts, 0..99.99, with at most two decimal
+places. Oversized lines are discarded through the next newline.
+Only the main voltage region is redrawn on updates. Touch diagnostics still report
+the panel's native portrait coordinates; the battery display has no touch controls.
+
 ## What the app does
 
 At runtime, the firmware:
 
-- initializes the display and prints color bars
+- displays battery voltage plus fixed MIN 0 V / MAX 28 V in landscape
 - checks the GT911 touch sensor
 - exposes a USB composite device with CDC + UAC2
 - supports console-driven behavior for testing and recovery
