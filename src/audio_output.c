@@ -53,7 +53,8 @@ static unsigned int tone_phase;
 
 /*
  * Wait for WS falling, skip the I2S delay bit, capture the 32-bit left slot.
- * JMP target is absolute (TX program occupies the first 8 instruction slots).
+ * JMP target is program-relative: pio_add_program() relocates it to the
+ * load offset after the TX program.
  */
 static const uint16_t i2s_rx_instructions[] = {
 	PIO_WAIT_GPIO(1, LRCLK),
@@ -64,7 +65,7 @@ static const uint16_t i2s_rx_instructions[] = {
 	PIO_WAIT_GPIO(1, BCLK),
 	PIO_IN_PINS(1),
 	PIO_WAIT_GPIO(0, BCLK),
-	PIO_JMP_X_DEC(I2S_RX_ORIGIN + I2S_RX_BITLOOP),
+	PIO_JMP_X_DEC(I2S_RX_BITLOOP),
 };
 
 static const int16_t tone[48] = {

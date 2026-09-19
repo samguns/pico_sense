@@ -74,8 +74,8 @@ values in the session or in your user environment; do not commit host-specific
 absolute paths. If this directory is itself a west workspace, `[zephyr] base`
 stays the manifest-relative `deps/zephyr`.
 
-Before the first build, apply the USB SOF fix following
-[patches/README.txt](patches/README.txt). It prevents a USB interrupt stall when
+Before the first build, apply the USB audio driver fixes following
+[patches/README.txt](patches/README.txt). These prevent a USB interrupt stall and excessive queueing logs when
 UAC2 is enabled. Skip applying the patch if it is already present.
 
 ## Build

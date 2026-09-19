@@ -89,19 +89,19 @@ READMEs).
 If this directory is itself a west workspace, `[zephyr] base` stays the
 manifest-relative `deps/zephyr` created by `west update`.
 
-Before the first build, apply the USB SOF fix following
-[patches/README.txt](patches/README.txt). It prevents a USB interrupt stall when
+Before the first build, apply the USB audio driver fixes following
+[patches/README.txt](patches/README.txt). These prevent a USB interrupt stall and excessive queueing logs when
 UAC2 is enabled. Skip applying the patch if it is already present.
 
 ```powershell
-git -C $env:ZEPHYR_BASE apply --check "$PWD\patches\0001-udc-rpi-pico-ack-sof.patch"
-git -C $env:ZEPHYR_BASE apply "$PWD\patches\0001-udc-rpi-pico-ack-sof.patch"
+git -C $env:ZEPHYR_BASE apply --check "$PWD\patches\0001-udc-rpi-pico-audio-fixes.patch"
+git -C $env:ZEPHYR_BASE apply "$PWD\patches\0001-udc-rpi-pico-audio-fixes.patch"
 ```
 
 To check whether this exact patch is already applied:
 
 ```powershell
-git -C $env:ZEPHYR_BASE apply --reverse --check "$PWD\patches\0001-udc-rpi-pico-ack-sof.patch"
+git -C $env:ZEPHYR_BASE apply --reverse --check "$PWD\patches\0001-udc-rpi-pico-audio-fixes.patch"
 ```
 
 If that check succeeds, skip applying it again.
@@ -246,7 +246,7 @@ west build -d build-no-usb -b rpi_pico2/rp2350a/m33 . -- `
   confirm the USB SOF patch is applied and rebuild.
 - If the color bars never appear after a UAC2 build, the firmware is likely
   stuck in the USB ISR because `SOF_RD` was not acknowledged. Apply
-  [patches/0001-udc-rpi-pico-ack-sof.patch](patches/0001-udc-rpi-pico-ack-sof.patch).
+  [patches/0001-udc-rpi-pico-audio-fixes.patch](patches/0001-udc-rpi-pico-audio-fixes.patch).
 - Windows `usbaudio2.sys` needs Full-Speed asynchronous UAC2 with explicit
   feedback. This project already sets `CONFIG_USBD_UAC2_FS_WINDOWS_WORKAROUND`.
   Do not switch the overlay to implicit feedback or SOF-synchronous ISO.

@@ -44,8 +44,8 @@ Build:
   From the project directory:
   west build -b rpi_pico2/rp2350a/m33 .
 
-The USB SOF acknowledgement patch in patches/ must be applied to any
-Zephyr checkout missing the fix. See patches/README.txt for instructions.
+The combined USB audio driver patch in patches/ must be applied to any
+Zephyr checkout missing the fixes. See patches/README.txt for instructions.
 
 Implementation:
   PIO0 SM0 generates 32-bit I2S: 48 kHz LRCLK, 3.072 MHz BCLK (64 clocks

@@ -14,6 +14,41 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 class AudioTests(unittest.TestCase):
+    def test_rx_relocated_loop_captures_a_complete_word(self):
+        source = (ROOT / "src/audio_output.c").read_text()
+        tx = (ROOT / "src/i2s_program.h").read_text()
+        origin = len(re.findall(r"^\s*0x[0-9a-f]+,", tx, re.M))
+        constants = {"I2S_RX_ORIGIN": origin}
+        for name in ("I2S_RX_BITLOOP", "I2S_RX_JMP"):
+            constants[name] = int(re.search(
+                rf"#define\s+{name}\s+(\d+)", source)[1])
+        program = source.split("i2s_rx_instructions[] = {", 1)[1].split("};", 1)[0]
+        expression = re.search(r"PIO_JMP_X_DEC\(([^)]+)\)", program)[1]
+        # The SDK relocates encoded JMP addresses by adding the load offset.
+        target = origin + sum(constants[part.strip()] for part in expression.split("+"))
+        pc, x, captured = origin + 4, 0, 0
+        word = 0x81234500
+        bits = iter((word >> bit) & 1 for bit in range(31, -1, -1))
+        samples = 0
+        for _ in range(200):
+            self.assertTrue(origin <= pc <= origin + constants["I2S_RX_JMP"],
+                            f"RX jumped outside its program: {pc}")
+            relative = pc - origin
+            if relative == 4:
+                x = 31
+            elif relative == 6:
+                captured = (captured << 1) | next(bits)
+                samples += 1
+            elif relative == constants["I2S_RX_JMP"]:
+                if x:
+                    x -= 1
+                    pc = target
+                    continue
+                break
+            pc += 1
+        self.assertEqual(samples, 32)
+        self.assertEqual(captured, word)
+
     def test_pcm_ring_wrap_overflow_and_underflow(self):
         with tempfile.TemporaryDirectory() as directory:
             source = pathlib.Path(directory) / "ring.c"
