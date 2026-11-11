@@ -19,3 +19,7 @@ manifest:
       remote: zephyrproject-rtos
       revision: 266394b0f23dff8f77c54f67f89d62cee246f21d
       path: modules/hal/rpi_pico
+    - name: lvgl
+      remote: zephyrproject-rtos
+      revision: d1fe35d350a1503db2ec7fd4dfff8e0cc26eea7e
+      path: modules/lib/gui/lvgl

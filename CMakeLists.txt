@@ -12,5 +12,20 @@ if(PICO_SENSE_DIAGNOSTIC_NO_USB)
   target_compile_definitions(app PRIVATE PICO_SENSE_DIAGNOSTIC_NO_USB=1)
 endif()
 
-target_sources(app PRIVATE src/main.c src/battery_display.c src/battery_voltage.c src/usb.c src/uac2_headset.c)
+target_sources(app PRIVATE src/main.c src/display_font.c src/battery_voltage.c src/volume_control.c src/wifi_ui.c src/usb.c src/uac2_headset.c)
 target_sources_ifdef(CONFIG_PICO_SENSE_AUDIO app PRIVATE src/audio_output.c)
+
+target_sources_ifdef(CONFIG_PICO_SENSE_LVGL_WIFI app PRIVATE src/wifi_ui_lvgl.c)
+
+if(CONFIG_PICO_SENSE_LVGL_WIFI)
+  target_sources(app PRIVATE src/battery_display_lvgl.c src/dashboard_lvgl.c src/ui_cards.c)
+else()
+  target_sources(app PRIVATE src/battery_display.c)
+endif()
+
+# Board-local GT911 driver: atomic read/ack and a dedicated polling workqueue.
+# Keep the upstream Kconfig/devicetree binding, replacing only its source.
+get_target_property(pico_input_sources drivers__input SOURCES)
+list(FILTER pico_input_sources EXCLUDE REGEX "(^|/)input_gt911\\.c$")
+set_property(TARGET drivers__input PROPERTY SOURCES "${pico_input_sources}")
+target_sources(app PRIVATE drivers/input_gt911.c)

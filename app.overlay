@@ -3,6 +3,7 @@
 #include <zephyr/dt-bindings/i2c/i2c.h>
 #include <zephyr/dt-bindings/mipi_dbi/mipi_dbi.h>
 #include <zephyr/dt-bindings/pinctrl/rpi-pico-rp2350a-pinctrl.h>
+#include <zephyr/dt-bindings/dma/rpi-pico-dma-rp2350.h>
 
 / {
 	aliases {
@@ -105,7 +106,7 @@
 		st7796s: st7796s@0 {
 			compatible = "sitronix,st7796s";
 			reg = <0>;
-			mipi-max-frequency = <16000000>;
+			mipi-max-frequency = <15000000>;
 			mipi-mode = "MIPI_DBI_MODE_SPI_4WIRE";
 			width = <480>;
 			height = <320>;
@@ -152,6 +153,17 @@
 	pinctrl-0 = <&spi0_lcd>;
 	pinctrl-names = "default";
 	cs-gpios = <&gpio0 17 GPIO_ACTIVE_LOW>;
+    dmas = <&dma 14 RPI_PICO_DMA_SLOT_SPI0_TX 0>,
+           <&dma 15 RPI_PICO_DMA_SLOT_SPI0_RX 0>;
+    dma-names = "tx", "rx";
+};
+
+/* Audio keeps IRQ0. Zephyr services LCD channels on IRQ1 only. */
+&dma {
+    status = "okay";
+    interrupts = <11 RPI_PICO_DEFAULT_IRQ_PRIORITY>;
+    interrupt-names = "dma1";
+    irq0-channels = [];
 };
 
 &i2c1 {
@@ -168,5 +180,9 @@
 		display = <&st7796s>;
 		screen-width = <320>;
 		screen-height = <480>;
+		/* Match LCD MADCTL.MV: native portrait axes become landscape X/Y. */
+		swapped-x-y;
+		/* Native X becomes landscape Y; physical upward motion must lower Y. */
+		inverted-x;
 	};
 };

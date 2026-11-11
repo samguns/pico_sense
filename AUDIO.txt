@@ -36,6 +36,11 @@ Open the CDC serial port at 115200 baud (see README.md for port selection):
   loop       Copy USB playback to the USB recording stream; ignore the mic.
   boot       Return to the BOOTSEL USB bootloader.
 
+Slide one finger up/down on the LCD right half to raise/lower speaker volume.
+The transient vertical volume HUD eases its fill and fades away when idle.
+Console vol queries the level; vol 0..100 sets it and shows the same HUD.
+Gain changes ramp per sample, rather than abruptly stepping each DMA block.
+
 The tone temporarily replaces speaker playback. Volume applies to both
 the tone and playback, but not USB recording.
 
@@ -53,8 +58,11 @@ Implementation:
   PIO0 SM1 waits on those clocks and captures the left 32-bit slot from GP13.
   Two chained DMA channels per direction supply 2 ms buffers. DMA IRQ0
   refills TX and harvests RX; no audio busy loop.
-  The application owns DMA IRQ0 and initializes the DMA controller.
-  CONFIG_DMA must stay disabled to avoid a second driver owning that IRQ.
+  Audio owns DMA IRQ0. The Zephyr LCD SPI DMA driver uses IRQ1 only, on
+  channels 14/15. Those channels are also reserved in the SDK allocator so
+  audio cannot claim them. With CONFIG_DMA enabled, Zephyr initializes DMA
+  before SPI and audio must not reset the shared controller. Build assertions
+  enforce interrupt separation; do not restore the default DMA interrupt list.
   USB playback uses a locked 8 ms ring, a 4 ms prefill, silence on underrun,
   and occupancy-based asynchronous USB feedback to compensate clock drift.
   GP10/GP11 must stay adjacent; assignments are in app.overlay.

@@ -9,4 +9,13 @@ config PICO_SENSE_AUDIO
 	  PIO0 generates shared I2S clocks. Two DMA channels feed the MAX98357A
 	  and two more capture the INMP441 left channel.
 
+config PICO_SENSE_LVGL_WIFI
+	bool "LVGL dashboard and Wi-Fi trial"
+	depends on LVGL
+	default n
+	help
+	  Render the dashboard and Wi-Fi settings with LVGL partial buffers.
+	  Reuses two SPI DMA strips and removes the legacy framebuffer.
+	  Audio DMA allocations remain unchanged.
+
 source "Kconfig.zephyr"

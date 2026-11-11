@@ -7,3 +7,4 @@
 /.west/
 __pycache__/
 *.pyc
+/fonts/unifont-source.tar.gz

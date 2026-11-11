@@ -5,6 +5,7 @@
 #include "uac2_headset.h"
 
 #include <hardware/dma.h>
+#include <hardware/irq.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/misc/pio_rpi_pico/pio_rpi_pico.h>
@@ -35,7 +36,12 @@
 
 BUILD_ASSERT(LRCLK == BCLK + 1, "PIO side-set requires adjacent BCLK/LRCLK pins");
 BUILD_ASSERT(DATA_IN != DATA, "I2S DIN and SD must be different pins");
-BUILD_ASSERT(!IS_ENABLED(CONFIG_DMA), "Audio owns DMA IRQ0; do not enable the Zephyr DMA driver");
+#if defined(CONFIG_DMA)
+BUILD_ASSERT(DT_NUM_IRQS(DT_NODELABEL(dma)) == 1 &&
+             DT_IRQ_BY_IDX(DT_NODELABEL(dma), 0, irq) == DMA_IRQ_1 &&
+             DT_PROP_LEN(DT_NODELABEL(dma), irq0_channels) == 0,
+             "Zephyr DMA must use IRQ1 only; audio owns IRQ0");
+#endif
 
 static const struct device *const pio_dev = DEVICE_DT_GET(DT_ALIAS(audio_pio));
 static PIO audio_pio;
@@ -47,6 +53,7 @@ static int rx_channels[2] = { -1, -1 };
 static uint32_t tx_buffers[2][TX_WORDS];
 static uint32_t rx_buffers[2][BLOCK_FRAMES];
 static atomic_t volume = ATOMIC_INIT(25);
+static int applied_gain_q8 = 25 * 256;
 static atomic_t tone_request;
 static unsigned int tone_left;
 static unsigned int tone_phase;
@@ -140,7 +147,9 @@ static void fill_tx_buffer(unsigned int index)
 		} else if (i < got) {
 			sample = ((int32_t)pcm[2 * i] + pcm[2 * i + 1]) / 2;
 		}
-		sample = sample * (int32_t)gain / 100;
+		/* Ramp over samples so touch updates do not introduce gain-step clicks. */
+		applied_gain_q8 += CLAMP((int)gain * 256 - applied_gain_q8, -32, 32);
+		sample = sample * applied_gain_q8 / 25600;
 		uint32_t slot = ((uint16_t)sample) << 16;
 
 		tx_buffers[index][2 * i] = slot;
@@ -287,7 +296,9 @@ static int audio_tx_init(uint32_t clock_hz)
 
 int audio_output_init(void)
 {
+#if !defined(CONFIG_DMA)
 	const struct reset_dt_spec dma_reset = RESET_DT_SPEC_GET(DT_NODELABEL(dma));
+#endif
 	const struct device *clock = DEVICE_DT_GET(DT_CLOCKS_CTLR(DT_ALIAS(audio_pio)));
 	clock_control_subsys_t clock_id =
 		(clock_control_subsys_t)DT_CLOCKS_CELL(DT_ALIAS(audio_pio), clk_id);
@@ -301,10 +312,22 @@ int audio_output_init(void)
 	if (ret < 0) {
 		return ret;
 	}
+#if defined(CONFIG_DMA)
+    /* The Zephyr driver initialized DMA before SPI. Do not reset it here.
+     * Its channel allocator is independent of the SDK allocator used by audio. */
+    const unsigned lcd_channels[] = {
+        DT_DMAS_CELL_BY_NAME(DT_NODELABEL(spi0), tx, channel),
+        DT_DMAS_CELL_BY_NAME(DT_NODELABEL(spi0), rx, channel),
+    };
+    for (unsigned i = 0; i < ARRAY_SIZE(lcd_channels); ++i) {
+        if (!dma_channel_is_claimed(lcd_channels[i])) dma_channel_claim(lcd_channels[i]);
+    }
+#else
 	ret = reset_line_toggle_dt(&dma_reset);
 	if (ret < 0) {
 		return ret;
 	}
+#endif
 
 	audio_pio = pio_rpi_pico_get_pio(pio_dev);
 	ret = audio_tx_init(clock_hz);
@@ -316,8 +339,8 @@ int audio_output_init(void)
 		printk("demo: INMP441 I2S RX unavailable (%d)\n", ret);
 	}
 
-	IRQ_CONNECT(DT_IRQ_BY_IDX(DT_NODELABEL(dma), 0, irq), 2, audio_dma_isr, NULL, 0);
-	irq_enable(DT_IRQ_BY_IDX(DT_NODELABEL(dma), 0, irq));
+	IRQ_CONNECT(DMA_IRQ_0, 2, audio_dma_isr, NULL, 0);
+	irq_enable(DMA_IRQ_0);
 	dma_start_channel_mask(BIT(tx_channels[0]));
 	if (rx_enabled) {
 		pio_set_sm_mask_enabled(audio_pio, BIT(tx_sm) | BIT(rx_sm), true);
@@ -335,4 +358,9 @@ void audio_output_test_tone(void)
 void audio_output_set_volume(unsigned int percent)
 {
 	atomic_set(&volume, MIN(percent, 100));
+}
+
+unsigned int audio_output_get_volume(void)
+{
+	return atomic_get(&volume);
 }
